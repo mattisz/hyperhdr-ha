@@ -16,7 +16,7 @@ DOMAIN = "hyperion"
 HYPERION_MANUFACTURER_NAME = "Hyperion"
 HYPERION_MODEL_NAME = f"{HYPERION_MANUFACTURER_NAME}-NG"
 HYPERION_RELEASES_URL = "https://github.com/hyperion-project/hyperion.ng/releases"
-HYPERION_VERSION_WARN_CUTOFF = "2.0.0-alpha.9"
+HYPERION_VERSION_WARN_CUTOFF = "20.0.0.0"
 
 SIGNAL_INSTANCE_ADD = f"{DOMAIN}_instance_add_signal.{{}}"
 SIGNAL_INSTANCE_REMOVE = f"{DOMAIN}_instance_remove_signal.{{}}"
