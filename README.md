@@ -22,26 +22,26 @@ Platform | Description
 `light` | Show HyperHDR as a controllable device.
 `switch` | Show switches to control HyperHDR components.
 
-![hyperhdr-logo](https://github.com/mjoshd/hyperhdr-ha/blob/master/hyperhdr-logo.png)
+![hyperhdr-logo](https://github.com/mattisz/hyperhdr-ha/blob/master/hyperhdr-logo.png)
 
 ## Installation
 
 ### Using HACS
 
-1. Add <https://github.com/mjoshd/hyperhdr-ha> to your [HACS](https://hacs.xyz/) custom repositories.
+1. Add <https://github.com/mattisz/hyperhdr-ha> to your [HACS](https://hacs.xyz/) custom repositories.
 1. Choose `Integration` from the category selection.
 1. Click install.
 1. Return to the Integrations page within HACS then click the `+ Explore & download repositories` button.
 1. Search for `HyperHDR`, select it, then click `Download this repository with HACS`.
 1. Restart Home Assistant to load the integration.
 1. Visit the Wiki for information regarding: 
-    - [Initial Setup](https://github.com/mjoshd/hyperhdr-ha/wiki#initial-setup)
-    - [Post-setup Advice](https://github.com/mjoshd/hyperhdr-ha/wiki#post-setup-advice)
-    - [Debug Logging](https://github.com/mjoshd/hyperhdr-ha/wiki#debug-logging)
+    - [Initial Setup](https://github.com/mattisz/hyperhdr-ha/wiki#initial-setup)
+    - [Post-setup Advice](https://github.com/mattisz/hyperhdr-ha/wiki#post-setup-advice)
+    - [Debug Logging](https://github.com/mattisz/hyperhdr-ha/wiki#debug-logging)
 
 ### Manually (not recommended)
 
-- Download the [latest release](https://github.com/mjoshd/hyperhdr-ha/releases) as a **zip file** then extract it and move the `hyperhdr` folder into the `custom_components` folder in your Home Assistant installation.
+- Download the [latest release](https://github.com/mattisz/hyperhdr-ha/releases) as a **zip file** then extract it and move the `hyperhdr` folder into the `custom_components` folder in your Home Assistant installation.
 - Restart Home Assistant to load the integration.
 
 ## Configuration
