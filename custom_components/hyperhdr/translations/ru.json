@@ -65,9 +65,6 @@
             "forwarder": {
                 "name": "Component Forwarder"
             },
-            "boblight_server": {
-                "name": "Component Boblight Server"
-            },
             "platform_capture": {
                 "name": "Component Platform Capture"
             },
