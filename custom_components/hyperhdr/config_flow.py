@@ -1,4 +1,4 @@
-"""HyperHDR config flow."""
+"""Hyperion config flow."""
 
 from __future__ import annotations
 
@@ -9,10 +9,9 @@ import logging
 from typing import Any
 from urllib.parse import urlparse
 
-from hyperhdr import client, const
+from hyperion import client, const
 import voluptuous as vol
 
-from homeassistant.components import ssdp
 from homeassistant.config_entries import (
     SOURCE_REAUTH,
     ConfigEntry,
@@ -29,9 +28,10 @@ from homeassistant.const import (
     CONF_TOKEN,
 )
 from homeassistant.core import callback
-import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.service_info.ssdp import ATTR_UPNP_SERIAL, SsdpServiceInfo
 
-from . import create_hyperhdr_client
+from . import create_hyperion_client
 from .const import (
     CONF_AUTH_ID,
     CONF_CREATE_TOKEN,
@@ -96,8 +96,8 @@ _LOGGER.setLevel(logging.DEBUG)
 #                                 | Create/Update! |
 #                                 +----------------+
 
-# A note on choice of discovery mechanisms: HyperHDR supports both Zeroconf and SSDP out
-# of the box. This config flow needs two port numbers from the HyperHDR instance, the
+# A note on choice of discovery mechanisms: Hyperion supports both Zeroconf and SSDP out
+# of the box. This config flow needs two port numbers from the Hyperion instance, the
 # JSON port (for the API) and the UI port (for the user to approve dynamically created
 # auth tokens). With Zeroconf the port numbers for both are in different Zeroconf
 # entries, and as Home Assistant only passes a single entry into the config flow, we can
@@ -106,10 +106,12 @@ _LOGGER.setLevel(logging.DEBUG)
 # the favored discovery implementation.
 
 
-class HyperHDRConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle a HyperHDR config flow."""
+class HyperionConfigFlow(ConfigFlow, domain=DOMAIN):
+    """Handle a Hyperion config flow."""
 
     VERSION = 1
+
+    unique_id: str
 
     def __init__(self) -> None:
         """Instantiate config flow."""
@@ -119,9 +121,9 @@ class HyperHDRConfigFlow(ConfigFlow, domain=DOMAIN):
         self._require_confirm: bool = False
         self._port_ui: int = const.DEFAULT_PORT_UI
 
-    def _create_client(self, raw_connection: bool = False) -> client.HyperHDRClient:
+    def _create_client(self, raw_connection: bool = False) -> client.HyperionClient:
         """Create and connect a client instance."""
-        return create_hyperhdr_client(
+        return create_hyperion_client(
             self._data[CONF_HOST],
             self._data[CONF_PORT],
             token=self._data.get(CONF_TOKEN),
@@ -129,10 +131,10 @@ class HyperHDRConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     async def _advance_to_auth_step_if_necessary(
-        self, hyperhdr_client: client.HyperHDRClient
+        self, hyperion_client: client.HyperionClient
     ) -> ConfigFlowResult:
         """Determine if auth is required."""
-        auth_resp = await hyperhdr_client.async_is_auth_required()
+        auth_resp = await hyperion_client.async_is_auth_required()
 
         # Could not determine if auth is required.
         if not auth_resp or not client.ResponseOK(auth_resp):
@@ -147,26 +149,26 @@ class HyperHDRConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle a reauthentication flow."""
         self._data = dict(entry_data)
-        async with self._create_client(raw_connection=True) as hyperhdr_client:
-            if not hyperhdr_client:
+        async with self._create_client(raw_connection=True) as hyperion_client:
+            if not hyperion_client:
                 return self.async_abort(reason="cannot_connect")
-            return await self._advance_to_auth_step_if_necessary(hyperhdr_client)
+            return await self._advance_to_auth_step_if_necessary(hyperion_client)
 
     async def async_step_ssdp(
-        self, discovery_info: ssdp.SsdpServiceInfo
+        self, discovery_info: SsdpServiceInfo
     ) -> ConfigFlowResult:
         """Handle a flow initiated by SSDP."""
         # Sample data provided by SSDP: {
         #   'ssdp_location': 'http://192.168.0.1:8090/description.xml',
         #   'ssdp_st': 'upnp:rootdevice',
         #   'deviceType': 'urn:schemas-upnp-org:device:Basic:1',
-        #   'friendlyName': 'HyperHDR (192.168.0.1)',
-        #   'manufacturer': 'HyperHDR Open Source Ambient Lighting',
-        #   'manufacturerURL': 'https://www.hyperhdr-project.org',
-        #   'modelDescription': 'HyperHDR Open Source Ambient Light',
-        #   'modelName': 'HyperHDR',
+        #   'friendlyName': 'Hyperion (192.168.0.1)',
+        #   'manufacturer': 'Hyperion Open Source Ambient Lighting',
+        #   'manufacturerURL': 'https://www.hyperion-project.org',
+        #   'modelDescription': 'Hyperion Open Source Ambient Light',
+        #   'modelName': 'Hyperion',
         #   'modelNumber': '2.0.0-alpha.8',
-        #   'modelURL': 'https://www.hyperhdr-project.org',
+        #   'modelURL': 'https://www.hyperion-project.org',
         #   'serialNumber': 'f9aab089-f85a-55cf-b7c1-222a72faebe9',
         #   'UDN': 'uuid:f9aab089-f85a-55cf-b7c1-222a72faebe9',
         #   'ports': {
@@ -182,12 +184,12 @@ class HyperHDRConfigFlow(ConfigFlow, domain=DOMAIN):
         #           'height': '100',
         #           'width': '100',
         #           'depth': '32',
-        #           'url': 'img/hyperhdr/ssdp_icon.png'
+        #           'url': 'img/hyperion/ssdp_icon.png'
         #       }
         #   },
         #   'ssdp_usn': 'uuid:f9aab089-f85a-55cf-b7c1-222a72faebe9',
         #   'ssdp_ext': '',
-        #   'ssdp_server': 'Raspbian GNU/Linux 10 (buster)/10 UPnP/1.0 HyperHDR/2.0.0-alpha.8'}
+        #   'ssdp_server': 'Raspbian GNU/Linux 10 (buster)/10 UPnP/1.0 Hyperion/2.0.0-alpha.8'}
 
         # SSDP requires user confirmation.
         self._require_confirm = True
@@ -208,20 +210,20 @@ class HyperHDRConfigFlow(ConfigFlow, domain=DOMAIN):
         except ValueError:
             self._data[CONF_PORT] = const.DEFAULT_PORT_JSON
 
-        if not (hyperhdr_id := discovery_info.upnp.get(ssdp.ATTR_UPNP_SERIAL)):
+        if not (hyperion_id := discovery_info.upnp.get(ATTR_UPNP_SERIAL)):
             return self.async_abort(reason="no_id")
 
         # For discovery mechanisms, we set the unique_id as early as possible to
         # avoid discovery popping up a duplicate on the screen. The unique_id is set
         # authoritatively later in the flow by asking the server to confirm its id
         # (which should theoretically be the same as specified here)
-        await self.async_set_unique_id(hyperhdr_id)
+        await self.async_set_unique_id(hyperion_id)
         self._abort_if_unique_id_configured()
 
-        async with self._create_client(raw_connection=True) as hyperhdr_client:
-            if not hyperhdr_client:
+        async with self._create_client(raw_connection=True) as hyperion_client:
+            if not hyperion_client:
                 return self.async_abort(reason="cannot_connect")
-            return await self._advance_to_auth_step_if_necessary(hyperhdr_client)
+            return await self._advance_to_auth_step_if_necessary(hyperion_client)
 
     async def async_step_user(
         self,
@@ -232,10 +234,10 @@ class HyperHDRConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input:
             self._data.update(user_input)
 
-            async with self._create_client(raw_connection=True) as hyperhdr_client:
-                if hyperhdr_client:
+            async with self._create_client(raw_connection=True) as hyperion_client:
+                if hyperion_client:
                     return await self._advance_to_auth_step_if_necessary(
-                        hyperhdr_client
+                        hyperion_client
                     )
                 errors[CONF_BASE] = "cannot_connect"
 
@@ -263,18 +265,18 @@ class HyperHDRConfigFlow(ConfigFlow, domain=DOMAIN):
     async def _request_token_task_func(self, auth_id: str) -> None:
         """Send an async_request_token request."""
         auth_resp: dict[str, Any] | None = None
-        async with self._create_client(raw_connection=True) as hyperhdr_client:
-            if hyperhdr_client:
-                # The HyperHDR-py client has a default timeout of 3 minutes on this request.
-                auth_resp = await hyperhdr_client.async_request_token(
+        async with self._create_client(raw_connection=True) as hyperion_client:
+            if hyperion_client:
+                # The Hyperion-py client has a default timeout of 3 minutes on this request.
+                auth_resp = await hyperion_client.async_request_token(
                     comment=DEFAULT_ORIGIN, id=auth_id
                 )
             await self.hass.config_entries.flow.async_configure(
                 flow_id=self.flow_id, user_input=auth_resp
             )
 
-    def _get_hyperhdr_url(self) -> str:
-        """Return the URL of the HyperHDR UI."""
+    def _get_hyperion_url(self) -> str:
+        """Return the URL of the Hyperion UI."""
         # If this flow was kicked off by SSDP, this will be the correct frontend URL. If
         # this is a manual flow instantiation, then it will be a best guess (as this
         # flow does not have that information available to it). This is only used for
@@ -285,12 +287,12 @@ class HyperHDRConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def _can_login(self) -> bool | None:
         """Verify login details."""
-        async with self._create_client(raw_connection=True) as hyperhdr_client:
-            if not hyperhdr_client:
+        async with self._create_client(raw_connection=True) as hyperion_client:
+            if not hyperion_client:
                 return None
             return bool(
                 client.LoginResponseOK(
-                    await hyperhdr_client.async_login(token=self._data[CONF_TOKEN])
+                    await hyperion_client.async_login(token=self._data[CONF_TOKEN])
                 )
             )
 
@@ -340,14 +342,14 @@ class HyperHDRConfigFlow(ConfigFlow, domain=DOMAIN):
         # Cancel the request token task if it's already running, then re-create it.
         await self._cancel_request_token_task()
         # Start a task in the background requesting a new token. The next step will
-        # wait on the response (which includes the user needing to visit the HyperHDR
+        # wait on the response (which includes the user needing to visit the Hyperion
         # UI to approve the request for a new token).
         assert self._auth_id is not None
         self._request_token_task = self.hass.async_create_task(
             self._request_token_task_func(self._auth_id), eager_start=False
         )
         return self.async_external_step(
-            step_id="create_token_external", url=self._get_hyperhdr_url()
+            step_id="create_token_external", url=self._get_hyperion_url()
         )
 
     async def async_step_create_token_external(
@@ -401,15 +403,15 @@ class HyperHDRConfigFlow(ConfigFlow, domain=DOMAIN):
                 },
             )
 
-        async with self._create_client() as hyperhdr_client:
-            if not hyperhdr_client:
+        async with self._create_client() as hyperion_client:
+            if not hyperion_client:
                 return self.async_abort(reason="cannot_connect")
-            hyperhdr_id = await hyperhdr_client.async_sysinfo_id()
+            hyperion_id = await hyperion_client.async_sysinfo_id()
 
-        if not hyperhdr_id:
+        if not hyperion_id:
             return self.async_abort(reason="no_id")
 
-        entry = await self.async_set_unique_id(hyperhdr_id, raise_on_progress=False)
+        entry = await self.async_set_unique_id(hyperion_id, raise_on_progress=False)
 
         if self.context.get(CONF_SOURCE) == SOURCE_REAUTH and entry is not None:
             return self.async_update_reload_and_abort(entry, data=self._data)
@@ -422,24 +424,22 @@ class HyperHDRConfigFlow(ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry: ConfigEntry) -> HyperHDROptionsFlow:
-        """Get the HyperHDR Options flow."""
-        return HyperHDROptionsFlow(config_entry)
+    def async_get_options_flow(
+        config_entry: ConfigEntry,
+    ) -> HyperionOptionsFlow:
+        """Get the Hyperion Options flow."""
+        return HyperionOptionsFlow()
 
 
-class HyperHDROptionsFlow(OptionsFlow):
-    """HyperHDR options flow."""
+class HyperionOptionsFlow(OptionsFlow):
+    """Hyperion options flow."""
 
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        """Initialize a HyperHDR options flow."""
-        self._config_entry = config_entry
-
-    def _create_client(self) -> client.HyperHDRClient:
+    def _create_client(self) -> client.HyperionClient:
         """Create and connect a client instance."""
-        return create_hyperhdr_client(
-            self._config_entry.data[CONF_HOST],
-            self._config_entry.data[CONF_PORT],
-            token=self._config_entry.data.get(CONF_TOKEN),
+        return create_hyperion_client(
+            self.config_entry.data[CONF_HOST],
+            self.config_entry.data[CONF_PORT],
+            token=self.config_entry.data.get(CONF_TOKEN),
         )
 
     async def async_step_init(
@@ -448,14 +448,14 @@ class HyperHDROptionsFlow(OptionsFlow):
         """Manage the options."""
 
         effects = {}
-        async with self._create_client() as hyperhdr_client:
-            if not hyperhdr_client:
+        async with self._create_client() as hyperion_client:
+            if not hyperion_client:
                 return self.async_abort(reason="cannot_connect")
-            for effect in hyperhdr_client.effects or []:
+            for effect in hyperion_client.effects or []:
                 if const.KEY_NAME in effect:
                     effects[effect[const.KEY_NAME]] = effect[const.KEY_NAME]
 
-        # If a new effect is added to HyperHDR, we always want it to show by default. So
+        # If a new effect is added to Hyperion, we always want it to show by default. So
         # rather than store a 'show list' in the config entry, we store a 'hide list'.
         # However, it's more intuitive to ask the user to select which effects to show,
         # so we inverse the meaning prior to storage.
@@ -468,8 +468,7 @@ class HyperHDROptionsFlow(OptionsFlow):
             return self.async_create_entry(title="", data=user_input)
 
         default_effect_show_list = list(
-            set(effects)
-            - set(self._config_entry.options.get(CONF_EFFECT_HIDE_LIST, []))
+            set(effects) - set(self.config_entry.options.get(CONF_EFFECT_HIDE_LIST, []))
         )
 
         return self.async_show_form(
@@ -478,7 +477,7 @@ class HyperHDROptionsFlow(OptionsFlow):
                 {
                     vol.Optional(
                         CONF_PRIORITY,
-                        default=self._config_entry.options.get(
+                        default=self.config_entry.options.get(
                             CONF_PRIORITY, DEFAULT_PRIORITY
                         ),
                     ): vol.All(vol.Coerce(int), vol.Range(min=0, max=255)),

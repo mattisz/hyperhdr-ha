@@ -1,12 +1,12 @@
-"""Sensor platform for HyperHDR."""
+"""Sensor platform for Hyperion."""
 
 from __future__ import annotations
 
 import functools
 from typing import Any
 
-from hyperhdr import client
-from hyperhdr.const import (
+from hyperion import client
+from hyperion.const import (
     KEY_COMPONENTID,
     KEY_ORIGIN,
     KEY_OWNER,
@@ -19,31 +19,30 @@ from hyperhdr.const import (
 )
 
 from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
     async_dispatcher_send,
 )
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import (
-    get_hyperhdr_device_id,
-    get_hyperhdr_unique_id,
+    HyperionConfigEntry,
+    get_hyperion_device_id,
+    get_hyperion_unique_id,
     listen_for_instance_updates,
 )
 from .const import (
-    CONF_INSTANCE_CLIENTS,
     DOMAIN,
-    HYPERHDR_MANUFACTURER_NAME,
-    HYPERHDR_MODEL_NAME,
+    HYPERION_MANUFACTURER_NAME,
+    HYPERION_MODEL_NAME,
     SIGNAL_ENTITY_REMOVE,
-    TYPE_HYPERHDR_SENSOR_BASE,
-    TYPE_HYPERHDR_SENSOR_VISIBLE_PRIORITY,
+    TYPE_HYPERION_SENSOR_BASE,
+    TYPE_HYPERION_SENSOR_VISIBLE_PRIORITY,
 )
 
-SENSORS = [TYPE_HYPERHDR_SENSOR_VISIBLE_PRIORITY]
+SENSORS = [TYPE_HYPERION_SENSOR_VISIBLE_PRIORITY]
 PRIORITY_SENSOR_DESCRIPTION = SensorEntityDescription(
     key="visible_priority",
     translation_key="visible_priority",
@@ -53,32 +52,31 @@ PRIORITY_SENSOR_DESCRIPTION = SensorEntityDescription(
 
 def _sensor_unique_id(server_id: str, instance_num: int, suffix: str) -> str:
     """Calculate a sensor's unique_id."""
-    return get_hyperhdr_unique_id(
+    return get_hyperion_unique_id(
         server_id,
         instance_num,
-        f"{TYPE_HYPERHDR_SENSOR_BASE}_{suffix}",
+        f"{TYPE_HYPERION_SENSOR_BASE}_{suffix}",
     )
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    entry: HyperionConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up a HyperHDR platform from config entry."""
-    entry_data = hass.data[DOMAIN][config_entry.entry_id]
-    server_id = config_entry.unique_id
+    """Set up a Hyperion platform from config entry."""
+    server_id = entry.unique_id
 
     @callback
     def instance_add(instance_num: int, instance_name: str) -> None:
-        """Add entities for a new HyperHDR instance."""
+        """Add entities for a new Hyperion instance."""
         assert server_id
         sensors = [
-            HyperHDRVisiblePrioritySensor(
+            HyperionVisiblePrioritySensor(
                 server_id,
                 instance_num,
                 instance_name,
-                entry_data[CONF_INSTANCE_CLIENTS][instance_num],
+                entry.runtime_data.instance_clients[instance_num],
                 PRIORITY_SENSOR_DESCRIPTION,
             )
         ]
@@ -87,7 +85,7 @@ async def async_setup_entry(
 
     @callback
     def instance_remove(instance_num: int) -> None:
-        """Remove entities for an old HyperHDR instance."""
+        """Remove entities for an old Hyperion instance."""
         assert server_id
 
         for sensor in SENSORS:
@@ -98,10 +96,10 @@ async def async_setup_entry(
                 ),
             )
 
-    listen_for_instance_updates(hass, config_entry, instance_add, instance_remove)
+    listen_for_instance_updates(hass, entry, instance_add, instance_remove)
 
 
-class HyperHDRSensor(SensorEntity):
+class HyperionSensor(SensorEntity):
     """Sensor class."""
 
     _attr_has_entity_name = True
@@ -112,21 +110,21 @@ class HyperHDRSensor(SensorEntity):
         server_id: str,
         instance_num: int,
         instance_name: str,
-        hyperhdr_client: client.HyperHDRClient,
+        hyperion_client: client.HyperionClient,
         entity_description: SensorEntityDescription,
     ) -> None:
         """Initialize the sensor."""
         self.entity_description = entity_description
-        self._client = hyperhdr_client
+        self._client = hyperion_client
         self._attr_native_value = None
         self._client_callbacks: dict[str, Any] = {}
 
-        device_id = get_hyperhdr_device_id(server_id, instance_num)
+        device_id = get_hyperion_device_id(server_id, instance_num)
 
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, device_id)},
-            manufacturer=HYPERHDR_MANUFACTURER_NAME,
-            model=HYPERHDR_MODEL_NAME,
+            manufacturer=HYPERION_MANUFACTURER_NAME,
+            model=HYPERION_MODEL_NAME,
             name=instance_name,
             configuration_url=self._client.remote_url,
         )
@@ -153,25 +151,25 @@ class HyperHDRSensor(SensorEntity):
         self._client.remove_callbacks(self._client_callbacks)
 
 
-class HyperHDRVisiblePrioritySensor(HyperHDRSensor):
-    """Class that displays the visible priority of a HyperHDR instance."""
+class HyperionVisiblePrioritySensor(HyperionSensor):
+    """Class that displays the visible priority of a Hyperion instance."""
 
     def __init__(
         self,
         server_id: str,
         instance_num: int,
         instance_name: str,
-        hyperhdr_client: client.HyperHDRClient,
+        hyperion_client: client.HyperionClient,
         entity_description: SensorEntityDescription,
     ) -> None:
         """Initialize the sensor."""
 
         super().__init__(
-            server_id, instance_num, instance_name, hyperhdr_client, entity_description
+            server_id, instance_num, instance_name, hyperion_client, entity_description
         )
 
         self._attr_unique_id = _sensor_unique_id(
-            server_id, instance_num, TYPE_HYPERHDR_SENSOR_VISIBLE_PRIORITY
+            server_id, instance_num, TYPE_HYPERION_SENSOR_VISIBLE_PRIORITY
         )
 
         self._client_callbacks = {
@@ -180,7 +178,7 @@ class HyperHDRVisiblePrioritySensor(HyperHDRSensor):
 
     @callback
     def _update_priorities(self, _: dict[str, Any] | None = None) -> None:
-        """Update HyperHDR priorities."""
+        """Update Hyperion priorities."""
         state_value = None
         attrs = {}
 

@@ -1,23 +1,22 @@
-"""Switch platform for HyperHDR."""
+"""Switch platform for Hyperion."""
 
 from __future__ import annotations
 
 import functools
 from typing import Any
 
-from hyperhdr import client
-from hyperhdr.const import (
+from hyperion import client
+from hyperion.const import (
     KEY_COMPONENT,
     KEY_COMPONENTID_ALL,
     KEY_COMPONENTID_BLACKBORDER,
-    KEY_COMPONENTID_BOBLIGHTSERVER,
     KEY_COMPONENTID_FORWARDER,
-    KEY_COMPONENTID_SYSTEMGRABBER,
+    KEY_COMPONENTID_GRABBER,
     KEY_COMPONENTID_LEDDEVICE,
     KEY_COMPONENTID_SMOOTHING,
-    KEY_COMPONENTID_HDR,
     KEY_COMPONENTID_TO_NAME,
-    KEY_COMPONENTID_VIDEOGRABBER,
+    KEY_COMPONENTID_V4L,
+    KEY_COMPONENTID_HDR,
     KEY_COMPONENTS,
     KEY_COMPONENTSTATE,
     KEY_ENABLED,
@@ -27,7 +26,6 @@ from hyperhdr.const import (
 )
 
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -35,22 +33,21 @@ from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
     async_dispatcher_send,
 )
-from homeassistant.helpers.entity import DeviceInfo, EntityCategory
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import slugify
 
 from . import (
-    get_hyperhdr_device_id,
-    get_hyperhdr_unique_id,
+    HyperionConfigEntry,
+    get_hyperion_device_id,
+    get_hyperion_unique_id,
     listen_for_instance_updates,
 )
 from .const import (
-    CONF_INSTANCE_CLIENTS,
     DOMAIN,
-    HYPERHDR_MANUFACTURER_NAME,
-    HYPERHDR_MODEL_NAME,
+    HYPERION_MANUFACTURER_NAME,
+    HYPERION_MODEL_NAME,
     SIGNAL_ENTITY_REMOVE,
-    TYPE_HYPERHDR_COMPONENT_SWITCH_BASE,
+    TYPE_HYPERION_COMPONENT_SWITCH_BASE,
 )
 
 COMPONENT_SWITCHES = [
@@ -58,21 +55,20 @@ COMPONENT_SWITCHES = [
     KEY_COMPONENTID_SMOOTHING,
     KEY_COMPONENTID_BLACKBORDER,
     KEY_COMPONENTID_FORWARDER,
-    KEY_COMPONENTID_BOBLIGHTSERVER,
-    KEY_COMPONENTID_SYSTEMGRABBER,
+    KEY_COMPONENTID_GRABBER,
     KEY_COMPONENTID_LEDDEVICE,
-    KEY_COMPONENTID_VIDEOGRABBER,
+    KEY_COMPONENTID_V4L,
     KEY_COMPONENTID_HDR,
 ]
 
 
 def _component_to_unique_id(server_id: str, component: str, instance_num: int) -> str:
     """Convert a component to a unique_id."""
-    return get_hyperhdr_unique_id(
+    return get_hyperion_unique_id(
         server_id,
         instance_num,
         slugify(
-            f"{TYPE_HYPERHDR_COMPONENT_SWITCH_BASE} {KEY_COMPONENTID_TO_NAME[component]}"
+            f"{TYPE_HYPERION_COMPONENT_SWITCH_BASE} {KEY_COMPONENTID_TO_NAME[component]}"
         ),
     )
 
@@ -83,41 +79,39 @@ def _component_to_translation_key(component: str) -> str:
         KEY_COMPONENTID_SMOOTHING: "smoothing",
         KEY_COMPONENTID_BLACKBORDER: "blackbar_detection",
         KEY_COMPONENTID_FORWARDER: "forwarder",
-        KEY_COMPONENTID_BOBLIGHTSERVER: "boblight_server",
-        KEY_COMPONENTID_SYSTEMGRABBER: "platform_capture",
+        KEY_COMPONENTID_GRABBER: "platform_capture",
         KEY_COMPONENTID_LEDDEVICE: "led_device",
-        KEY_COMPONENTID_VIDEOGRABBER: "usb_capture",
-        KEY_COMPONENTID_HDR: "hdr_tone_mapping",
+        KEY_COMPONENTID_V4L: "usb_capture",
+        KEY_COMPONENTID_HDR: "hdr",
     }[component]
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    entry: HyperionConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up a HyperHDR platform from config entry."""
-    entry_data = hass.data[DOMAIN][config_entry.entry_id]
-    server_id = config_entry.unique_id
+    """Set up a Hyperion platform from config entry."""
+    server_id = entry.unique_id
 
     @callback
     def instance_add(instance_num: int, instance_name: str) -> None:
-        """Add entities for a new HyperHDR instance."""
+        """Add entities for a new Hyperion instance."""
         assert server_id
         async_add_entities(
-            HyperHDRComponentSwitch(
+            HyperionComponentSwitch(
                 server_id,
                 instance_num,
                 instance_name,
                 component,
-                entry_data[CONF_INSTANCE_CLIENTS][instance_num],
+                entry.runtime_data.instance_clients[instance_num],
             )
             for component in COMPONENT_SWITCHES
         )
 
     @callback
     def instance_remove(instance_num: int) -> None:
-        """Remove entities for an old HyperHDR instance."""
+        """Remove entities for an old Hyperion instance."""
         assert server_id
         for component in COMPONENT_SWITCHES:
             async_dispatcher_send(
@@ -127,10 +121,10 @@ async def async_setup_entry(
                 ),
             )
 
-    listen_for_instance_updates(hass, config_entry, instance_add, instance_remove)
+    listen_for_instance_updates(hass, entry, instance_add, instance_remove)
 
 
-class HyperHDRComponentSwitch(SwitchEntity):
+class HyperionComponentSwitch(SwitchEntity):
     """ComponentBinarySwitch switch class."""
 
     _attr_entity_category = EntityCategory.CONFIG
@@ -145,24 +139,24 @@ class HyperHDRComponentSwitch(SwitchEntity):
         instance_num: int,
         instance_name: str,
         component_name: str,
-        hyperhdr_client: client.HyperHDRClient,
+        hyperion_client: client.HyperionClient,
     ) -> None:
         """Initialize the switch."""
         self._attr_unique_id = _component_to_unique_id(
             server_id, component_name, instance_num
         )
-        self._device_id = get_hyperhdr_device_id(server_id, instance_num)
+        self._device_id = get_hyperion_device_id(server_id, instance_num)
         self._attr_translation_key = _component_to_translation_key(component_name)
         self._instance_name = instance_name
         self._component_name = component_name
-        self._client = hyperhdr_client
+        self._client = hyperion_client
         self._client_callbacks = {
             f"{KEY_COMPONENTS}-{KEY_UPDATE}": self._update_components
         }
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._device_id)},
-            manufacturer=HYPERHDR_MANUFACTURER_NAME,
-            model=HYPERHDR_MODEL_NAME,
+            manufacturer=HYPERION_MANUFACTURER_NAME,
+            model=HYPERION_MODEL_NAME,
             name=self._instance_name,
             configuration_url=self._client.remote_url,
         )
@@ -201,7 +195,7 @@ class HyperHDRComponentSwitch(SwitchEntity):
 
     @callback
     def _update_components(self, _: dict[str, Any] | None = None) -> None:
-        """Update HyperHDR components."""
+        """Update Hyperion components."""
         self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:

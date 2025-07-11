@@ -1,4 +1,4 @@
-"""Switch platform for HyperHDR."""
+"""Switch platform for Hyperion."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ import functools
 from typing import Any
 
 from aiohttp import web
-from hyperhdr import client
-from hyperhdr.const import (
+from hyperion import client
+from hyperion.const import (
     KEY_IMAGE,
     KEY_IMAGE_STREAM,
     KEY_LEDCOLORS,
@@ -25,27 +25,26 @@ from homeassistant.components.camera import (
     Camera,
     async_get_still_stream,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
     async_dispatcher_send,
 )
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import (
-    get_hyperhdr_device_id,
-    get_hyperhdr_unique_id,
+    HyperionConfigEntry,
+    get_hyperion_device_id,
+    get_hyperion_unique_id,
     listen_for_instance_updates,
 )
 from .const import (
-    CONF_INSTANCE_CLIENTS,
     DOMAIN,
-    HYPERHDR_MANUFACTURER_NAME,
-    HYPERHDR_MODEL_NAME,
+    HYPERION_MANUFACTURER_NAME,
+    HYPERION_MODEL_NAME,
     SIGNAL_ENTITY_REMOVE,
-    TYPE_HYPERHDR_CAMERA,
+    TYPE_HYPERION_CAMERA,
 )
 
 IMAGE_STREAM_JPG_SENTINEL = "data:image/jpg;base64,"
@@ -53,36 +52,35 @@ IMAGE_STREAM_JPG_SENTINEL = "data:image/jpg;base64,"
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    entry: HyperionConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up a HyperHDR platform from config entry."""
-    entry_data = hass.data[DOMAIN][config_entry.entry_id]
-    server_id = config_entry.unique_id
+    """Set up a Hyperion platform from config entry."""
+    server_id = entry.unique_id
 
     def camera_unique_id(instance_num: int) -> str:
         """Return the camera unique_id."""
         assert server_id
-        return get_hyperhdr_unique_id(server_id, instance_num, TYPE_HYPERHDR_CAMERA)
+        return get_hyperion_unique_id(server_id, instance_num, TYPE_HYPERION_CAMERA)
 
     @callback
     def instance_add(instance_num: int, instance_name: str) -> None:
-        """Add entities for a new HyperHDR instance."""
+        """Add entities for a new Hyperion instance."""
         assert server_id
         async_add_entities(
             [
-                HyperHDRCamera(
+                HyperionCamera(
                     server_id,
                     instance_num,
                     instance_name,
-                    entry_data[CONF_INSTANCE_CLIENTS][instance_num],
+                    entry.runtime_data.instance_clients[instance_num],
                 )
             ]
         )
 
     @callback
     def instance_remove(instance_num: int) -> None:
-        """Remove entities for an old HyperHDR instance."""
+        """Remove entities for an old Hyperion instance."""
         assert server_id
         async_dispatcher_send(
             hass,
@@ -91,23 +89,21 @@ async def async_setup_entry(
             ),
         )
 
-    listen_for_instance_updates(hass, config_entry, instance_add, instance_remove)
+    listen_for_instance_updates(hass, entry, instance_add, instance_remove)
 
 
-# A note on HyperHDR streaming semantics:
+# A note on Hyperion streaming semantics:
 #
-# Different HyperHDR priorities behave different with regards to streaming. Colors will
+# Different Hyperion priorities behave different with regards to streaming. Colors will
 # not stream (as there is nothing to stream). External grabbers (e.g. USB Capture) will
 # stream what is being captured. Some effects (based on GIFs) will stream, others will
 # not. In cases when streaming is not supported from a selected priority, there is no
 # notification beyond the failure of new frames to arrive.
 
 
-class HyperHDRCamera(Camera):
+class HyperionCamera(Camera):
     """ComponentBinarySwitch switch class."""
 
-    # The camera component does not work and is being disabled by default.
-    _attr_entity_registry_enabled_default = False
     _attr_has_entity_name = True
     _attr_name = None
 
@@ -116,17 +112,17 @@ class HyperHDRCamera(Camera):
         server_id: str,
         instance_num: int,
         instance_name: str,
-        hyperhdr_client: client.HyperHDRClient,
+        hyperion_client: client.HyperionClient,
     ) -> None:
         """Initialize the switch."""
         super().__init__()
 
-        self._attr_unique_id = get_hyperhdr_unique_id(
-            server_id, instance_num, TYPE_HYPERHDR_CAMERA
+        self._attr_unique_id = get_hyperion_unique_id(
+            server_id, instance_num, TYPE_HYPERION_CAMERA
         )
-        self._device_id = get_hyperhdr_device_id(server_id, instance_num)
+        self._device_id = get_hyperion_device_id(server_id, instance_num)
         self._instance_name = instance_name
-        self._client = hyperhdr_client
+        self._client = hyperion_client
 
         self._image_cond = asyncio.Condition()
         self._image: bytes | None = None
@@ -139,10 +135,10 @@ class HyperHDRCamera(Camera):
         }
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._device_id)},
-            manufacturer=HYPERHDR_MANUFACTURER_NAME,
-            model=HYPERHDR_MODEL_NAME,
+            manufacturer=HYPERION_MANUFACTURER_NAME,
+            model=HYPERION_MODEL_NAME,
             name=instance_name,
-            configuration_url=hyperhdr_client.remote_url,
+            configuration_url=hyperion_client.remote_url,
         )
 
     @property
@@ -156,7 +152,7 @@ class HyperHDRCamera(Camera):
         return bool(self._client.has_loaded_state)
 
     async def _update_imagestream(self, img: dict[str, Any] | None = None) -> None:
-        """Update HyperHDR components."""
+        """Update Hyperion components."""
         if not img:
             return
         img_data = img.get(KEY_RESULT, {}).get(KEY_IMAGE)
@@ -248,5 +244,5 @@ class HyperHDRCamera(Camera):
 
 
 CAMERA_TYPES = {
-    TYPE_HYPERHDR_CAMERA: HyperHDRCamera,
+    TYPE_HYPERION_CAMERA: HyperionCamera,
 }
